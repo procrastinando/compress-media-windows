@@ -172,8 +172,13 @@ def get_tool_paths():
     Locate FFmpeg and ExifTool executables relative to the script (or bundled executable).
     """
     base_dir = sys._MEIPASS if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
-    ffmpeg_path = os.path.join(base_dir, "ffmpeg", "bin", "ffmpeg.exe")
-    exiftool_path = os.path.join(base_dir, "exiftool", "exiftool.exe")
+    
+    ffmpeg_dir = os.path.join(base_dir, "ffmpeg", "bin")
+    exiftool_dir = os.path.join(base_dir, "exiftool")
+    
+    ffmpeg_path = os.path.join(ffmpeg_dir, "ffmpeg.exe") if os.path.isdir(ffmpeg_dir) else "ffmpeg"
+    exiftool_path = os.path.join(exiftool_dir, "exiftool.exe") if os.path.isdir(exiftool_dir) else "exiftool"
+    
     return ffmpeg_path, exiftool_path
 
 ffmpeg_path, exiftool_path = get_tool_paths()
