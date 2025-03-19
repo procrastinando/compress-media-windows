@@ -287,15 +287,14 @@ if __name__ == "__main__":
                   "Reverting to CPU mode.")
             acceleration = "cpu"
 
-        batch_size = 1
-        if acceleration == "cpu":
-            try:
-                batch_input = input("Enter CPU batch size for parallel conversion (default 2): ").strip()
-                batch_size = int(batch_input) if batch_input else 2
-                print(f"Using batch size: {batch_size}")
-            except ValueError:
-                batch_size = 2
-                print("Invalid input for batch size, defaulting to 2.")
+        # Ask for batch size for parallel conversion regardless of acceleration type.
+        try:
+            batch_input = input("Enter batch size for parallel conversion (default 2): ").strip()
+            batch_size = int(batch_input) if batch_input else 2
+            print(f"Using batch size: {batch_size}")
+        except ValueError:
+            batch_size = 2
+            print("Invalid input for batch size, defaulting to 2.")
 
         output_dir = os.path.join(root_directory, "Compressed")
         if not replace_original:
@@ -311,32 +310,22 @@ if __name__ == "__main__":
         summary = {'.jpg': 0, '.jpeg': 0, '.png': 0, '.mp4': 0}
         results = [None] * total_files  # placeholder for ordered results
 
-        if acceleration in ("nvidia", "intel"):
-            # Hardware accelerated modes: process sequentially.
+        completed_count = 0
+        # Process files in parallel and print progress as each file finishes.
+        with ThreadPoolExecutor(max_workers=batch_size) as executor:
+            future_to_index = {}
             for idx, file in enumerate(media_files):
-                rel_path = os.path.relpath(file, root_directory)
-                result = process_file(file, output_dir, replace_original, video_bitrate, audio_bitrate, jpg_quality, acceleration)
+                future = executor.submit(process_file, file, output_dir, replace_original,
+                                           video_bitrate, audio_bitrate, jpg_quality, acceleration)
+                future_to_index[future] = idx
+            for future in as_completed(future_to_index):
+                idx = future_to_index[future]
+                result = future.result()
                 results[idx] = result
+                completed_count += 1
                 summary[result[2]] = summary.get(result[2], 0) + 1
-                percent = ((idx + 1) / total_files) * 100
-                print(f"{percent:05.2f}% {rel_path}: {result[1]}")
-        else:
-            # CPU mode: process files in parallel.
-            with ThreadPoolExecutor(max_workers=batch_size) as executor:
-                future_to_index = {}
-                for idx, file in enumerate(media_files):
-                    future = executor.submit(process_file, file, output_dir, replace_original,
-                                               video_bitrate, audio_bitrate, jpg_quality, acceleration)
-                    future_to_index[future] = idx
-                for future in as_completed(future_to_index):
-                    idx = future_to_index[future]
-                    result = future.result()
-                    results[idx] = result
-            # Now print results in the original order.
-            for idx, result in enumerate(results):
                 rel_path = os.path.relpath(result[0], root_directory)
-                summary[result[2]] = summary.get(result[2], 0) + 1
-                percent = ((idx + 1) / total_files) * 100
+                percent = (completed_count / total_files) * 100
                 print(f"{percent:05.2f}% {rel_path}: {result[1]}")
 
         elapsed_time = int(time.time() - start_time)
